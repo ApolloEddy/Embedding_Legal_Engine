@@ -1,0 +1,49 @@
+# Dependency directories
+**/.dart_tool/
+**/.packages
+**/build/
+**/windows/flutter/ephemeral/
+
+# Flutter generated files
+**/flutter_export_environment.bat
+**/pubspec.lock
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# =======================
+# 敏感配置文件（禁止上传）
+# =======================
+secrets.yaml
+secrets.json
+*.secret
+.env
+.env.*
+
+# API Key 配置
+config/secrets.yaml
+**/secrets/
+
+# SQLite 数据库
+*.sqlite3
+*.db
+db.sqlite3
+
+# 临时文件
+*.bak
+*.tmp
+
+# =======================
+# 法律原文文件（版权保护）
+# =======================
+**/Law/
+**/law/
+assets/law_articles/

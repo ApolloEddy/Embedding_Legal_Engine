@@ -1,0 +1,362 @@
+# 全面系统改造实施计划 V2
+
+> 创建日期：2026-01-03
+> 目标：修复所有问题 + 重命名程序 + 美化UI + 打包Android APK
+
+---
+
+## 实施阶段总览
+
+```mermaid
+gantt
+    title 实施计划甘特图
+    dateFormat HH:mm
+    axisFormat %H:%M
+    
+    section 阶段1 文档
+    保存审计报告到本地       :done, a1, 21:20, 5m
+    
+    section 阶段2 修复
+    Prompt注入防护           :crit, b1, 21:25, 15m
+    维度一致性校验           :crit, b2, after b1, 10m
+    请求防抖机制             :b3, after b2, 10m
+    阈值滑块范围调整         :b4, after b3, 5m
+    法律条文加载修复         :b5, after b4, 10m
+    
+    section 阶段3 重命名
+    目录重命名               :c1, after b5, 10m
+    代码引用修改             :c2, after c1, 15m
+    配置文件更新             :c3, after c2, 10m
+    
+    section 阶段4 UI美化
+    公安+科技风配色          :d1, after c3, 20m
+    组件样式升级             :d2, after d1, 15m
+    
+    section 阶段5 Android优化
+    响应式布局               :e1, after d2, 20m
+    触控优化                 :e2, after e1, 10m
+    
+    section 阶段6 资产生成
+    刑法341条Embedding       :f1, after e2, 15m
+    资产打包                 :f2, after f1, 10m
+    
+    section 阶段7 发布
+    APK构建                  :g1, after f2, 20m
+```
+
+---
+
+## 阶段1：保存审计报告到本地
+
+### 1.1 任务
+
+| 文件 | 源路径 | 目标路径 |
+|------|--------|----------|
+| 综合审计报告V2 | `brain/.../comprehensive_audit_v2.md` | `docs/comprehensive_audit_v2.md` |
+| 压力测试报告 | `brain/.../stress_test_report.md` | `docs/stress_test_report.md` |
+
+---
+
+## 阶段2：修复所有发现的问题
+
+### 2.1 Prompt注入防护 [🔴 严重]
+
+**问题**：用户输入直接拼接到Prompt中，存在注入攻击风险。
+
+**修复方案**：
+
+#### [NEW] `shared/lib/utils/input_sanitizer.dart`
+
+```dart
+/// 输入消毒工具
+class InputSanitizer {
+  /// 清理用户输入，防止Prompt注入
+  static String sanitize(String input) {
+    // 1. 移除潜在的指令覆盖尝试
+    var cleaned = input
+      .replaceAll(RegExp(r'忽略.{0,20}指令', caseSensitive: false), '')
+      .replaceAll(RegExp(r'ignore.{0,20}instruction', caseSensitive: false), '');
+    
+    // 2. 移除Markdown代码块（可能被用于伪造输出）
+    cleaned = cleaned.replaceAll(RegExp(r'```[\s\S]*?```'), '[代码块已移除]');
+    
+    // 3. 移除JSON字面量（防止直接注入输出）
+    cleaned = cleaned.replaceAll(RegExp(r'\{[\s\S]*"slot_id"[\s\S]*\}'), '[可疑JSON已移除]');
+    
+    return cleaned.trim();
+  }
+}
+```
+
+#### [MODIFY] [program_b/lib/services/llm_extraction_service.dart](file:///d:/CodingProjects/DartProject/Embedding_Legal_Engine/program_b/lib/services/llm_extraction_service.dart)
+
+在[_buildExtractionPrompt](file:///d:/CodingProjects/DartProject/Embedding_Legal_Engine/program_b/lib/services/llm_extraction_service.dart#90-140)方法中添加分隔符和消毒：
+
+```dart
+String _buildExtractionPrompt(String caseText, List<Slot> slots) {
+  // 消毒用户输入
+  final sanitizedCase = InputSanitizer.sanitize(caseText);
+  
+  // 使用分隔符隔离用户输入
+  buffer.writeln('### 案情描述：');
+  buffer.writeln('<<<BEGIN_CASE_TEXT>>>');
+  buffer.writeln(sanitizedCase);
+  buffer.writeln('<<<END_CASE_TEXT>>>');
+}
+```
+
+---
+
+### 2.2 维度一致性校验 [🔴 严重]
+
+**问题**：仅检查模型ID，未检查Embedding维度是否匹配。
+
+**修复方案**：
+
+#### [MODIFY] [program_b/lib/services/asset_loader_service.dart](file:///d:/CodingProjects/DartProject/Embedding_Legal_Engine/program_b/lib/services/asset_loader_service.dart)
+
+```dart
+ValidationResult validateAssetConsistency({
+  String? currentModelId,
+  int? currentDimension,  // 新增参数
+}) {
+  // 检查模型ID
+  if (currentModelId != null && 
+      embeddingPackage!.embeddingModelId != currentModelId) {
+    return ValidationResult(
+      isValid: false,
+      errorMessage: '模型不匹配: 包=${embeddingPackage!.embeddingModelId}, 配置=$currentModelId',
+    );
+  }
+  
+  // 新增：检查维度
+  if (currentDimension != null) {
+    final pkgDim = embeddingPackage!.embeddings.first.embedding.length;
+    if (pkgDim != currentDimension) {
+      return ValidationResult(
+        isValid: false,
+        errorMessage: '维度不匹配: 包=$pkgDim, 配置=$currentDimension',
+      );
+    }
+  }
+  
+  return ValidationResult(isValid: true);
+}
+```
+
+---
+
+### 2.3 请求防抖机制 [🟡 中等]
+
+**问题**：快速重复点击可能发送多次LLM请求。
+
+**修复方案**：
+
+#### [MODIFY] [program_b/lib/providers/app_provider.dart](file:///d:/CodingProjects/DartProject/Embedding_Legal_Engine/program_b/lib/providers/app_provider.dart)
+
+```dart
+bool _isExtracting = false;  // 新增
+
+Future<void> extractFacts() async {
+  if (_isExtracting) return;  // 防抖
+  _isExtracting = true;
+  
+  try {
+    // ...existing extraction logic
+  } finally {
+    _isExtracting = false;
+  }
+}
+```
+
+---
+
+### 2.4 阈值滑块范围调整 [🟡 中等]
+
+**问题**：滑块最小值0.5，但默认值已调至0.45。
+
+**修复方案**：
+
+#### [MODIFY] [program_b/lib/screens/settings_screen.dart](file:///d:/CodingProjects/DartProject/Embedding_Legal_Engine/program_b/lib/screens/settings_screen.dart)
+
+```dart
+Slider(
+  value: provider.similarityThreshold,
+  min: 0.3,   // 从0.5改为0.3
+  max: 0.9,   // 从0.95改为0.9
+  divisions: 12,
+  // ...
+)
+```
+
+---
+
+### 2.5 法律条文加载修复 [🔴 严重]
+
+**问题**：[loadArticlesFromDirectory](file:///d:/CodingProjects/DartProject/Embedding_Legal_Engine/program_a/lib/providers/app_provider.dart#214-233)未正确递归遍历子目录，导致加载0篇文章。
+
+**修复方案**：
+
+#### [MODIFY] [program_a/lib/services/embedding_service.dart](file:///d:/CodingProjects/DartProject/Embedding_Legal_Engine/program_a/lib/services/embedding_service.dart)
+
+```dart
+Future<List<LawArticle>> loadArticlesFromDirectory(String directoryPath) async {
+  final dir = Directory(directoryPath);
+  if (!await dir.exists()) {
+    throw Exception('目录不存在: $directoryPath');
+  }
+  
+  final articles = <LawArticle>[];
+  
+  // 递归遍历所有子目录
+  await for (final entity in dir.list(recursive: true, followLinks: false)) {
+    if (entity is File && 
+        (entity.path.endsWith('.md') || entity.path.endsWith('.txt'))) {
+      final content = await entity.readAsString();
+      final parsed = LawArticleParser.parseMarkdown(content, entity.path);
+      articles.addAll(parsed);
+    }
+  }
+  
+  return articles;
+}
+```
+
+---
+
+## 阶段3：程序重命名
+
+### 3.1 目录重命名
+
+| 原名 | 新名 |
+|------|------|
+| `program_a` | `embedding_builder_tool` |
+| `program_b` | `legal_assist` |
+
+### 3.2 需修改的文件
+
+| 文件 | 修改内容 |
+|------|----------|
+| `embedding_builder_tool/pubspec.yaml` | name: embedding_builder_tool |
+| `legal_assist/pubspec.yaml` | name: legal_assist |
+| `embedding_builder_tool/lib/main.dart` | 类名、标题 |
+| `legal_assist/lib/main.dart` | 类名、标题 |
+| [shared/pubspec.yaml](file:///d:/CodingProjects/DartProject/Embedding_Legal_Engine/shared/pubspec.yaml) | 无需修改 |
+| [.gitignore](file:///d:/CodingProjects/DartProject/Embedding_Legal_Engine/.gitignore) | 更新路径 |
+| 所有配置文件 | 更新引用 |
+
+---
+
+## 阶段4：UI美化（公安风格 + 科技感）
+
+### 4.1 配色方案
+
+```dart
+// 公安蓝 + 科技感渐变
+static const Color primaryBlue = Color(0xFF003366);      // 深蓝（警徽色）
+static const Color accentGold = Color(0xFFD4AF37);       // 金色点缀
+static const Color techCyan = Color(0xFF00CED1);         // 科技青
+static const Color bgDark = Color(0xFF0A1929);           // 深色背景
+static const Color cardBg = Color(0xFF132F4C);           // 卡片背景
+static const Color success = Color(0xFF4CAF50);          // 成功绿
+static const Color danger = Color(0xFFE53935);           // 警告红
+```
+
+### 4.2 组件样式
+
+- **顶部栏**：渐变蓝 + 国徽图标
+- **卡片**：圆角12px + 微发光边框
+- **按钮**：渐变填充 + 点击波纹
+- **输入框**：暗底 + 青色聚焦边框
+- **分析结果**：警务风格布局（左右分栏）
+
+---
+
+## 阶段5：Android端优化
+
+### 5.1 响应式布局
+
+```dart
+Widget build(BuildContext context) {
+  final isPortrait = MediaQuery.of(context).orientation == Orientation.portrait;
+  
+  if (isPortrait) {
+    return _buildMobileLayout();  // 底部导航
+  } else {
+    return _buildDesktopLayout(); // 侧边导航
+  }
+}
+```
+
+### 5.2 触控优化
+
+- 按钮最小高度48dp
+- 列表项间距增大
+- 滑动手势支持
+- 软键盘适配
+
+---
+
+## 阶段6：刑法341条Embedding生成
+
+### 6.1 目标罪名
+
+| 罪名ID | 罪名 |
+|--------|------|
+| C341_1 | 危害珍贵、濒危野生动物罪 |
+| C341_2 | 非法狩猎罪 |
+| C341_3 | 非法猎捕、收购、运输、出售陆生野生动物罪 |
+
+### 6.2 执行步骤
+
+1. 运行 [generate_package.dart](file:///d:/CodingProjects/DartProject/Embedding_Legal_Engine/program_a/bin/generate_package.dart) 生成 [legal_embeddings_v4.pak](file:///d:/CodingProjects/DartProject/Embedding_Legal_Engine/assets/legal_embeddings_v4.pak)
+2. 将pak复制到 `legal_assist/assets/`
+3. 配置 [pubspec.yaml](file:///d:/CodingProjects/DartProject/Embedding_Legal_Engine/shared/pubspec.yaml) 的 assets 声明
+
+---
+
+## 阶段7：APK打包与资产自动链接
+
+### 7.1 资产配置
+
+```yaml
+# legal_assist/pubspec.yaml
+flutter:
+  assets:
+    - assets/legal_base.yaml
+    - assets/legal_embeddings_v4.pak
+```
+
+### 7.2 自动加载逻辑
+
+```dart
+// 从应用资产加载默认Embedding包
+Future<void> loadBundledAssets() async {
+  final yamlData = await rootBundle.loadString('assets/legal_base.yaml');
+  final pakBytes = await rootBundle.load('assets/legal_embeddings_v4.pak');
+  // 解析并加载...
+}
+```
+
+### 7.3 APK构建命令
+
+```bash
+cd legal_assist
+flutter build apk --release
+```
+
+---
+
+## 用户确认事项
+
+> [!IMPORTANT]
+> **请确认以下事项再继续：**
+>
+> 1. 是否同意程序重命名为 `Embedding Builder Tool` 和 `Legal Assist`？
+> 2. 是否需要保留 Windows 版本，还是仅需 Android APK？
+> 3. 是否有国徽/警徽图标资源可用于UI，还是使用通用图标？
+> 4. 是否需要添加应用图标（App Icon）？
+
+---
+
+*计划创建时间：2026-01-03 21:19 CST*

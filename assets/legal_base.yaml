@@ -1,0 +1,157 @@
+# 野生动物罪名分析 - YAML 基座（测试用）
+# 版本：1.0.0
+# 法律体系：刑事
+# 测试范围：刑法第三百四十一条相关罪名
+
+yaml_version: "1.0.0"
+legal_system_type: "criminal"
+
+# 分析层级定义
+analysis_levels:
+  - level: 1
+    name: "核心构成要件"
+  - level: 2
+    name: "排除阻却事由"
+  - level: 3
+    name: "量刑情节"
+
+# 构成要素 Slot 定义
+slots:
+  # === 第一级：核心构成要件 ===
+  - slot_id: "S001"
+    slot_name: "主体适格性"
+    analysis_level: 1
+    required: true
+    role: "定性"
+    semantic_scope: "行为主体是否具备刑事责任能力，年满16周岁、精神正常"
+
+  - slot_id: "S002"
+    slot_name: "主观故意"
+    analysis_level: 1
+    required: true
+    role: "定性"
+    semantic_scope: "行为人明知是国家重点保护的珍贵、濒危野生动物或禁猎对象，仍故意实施相关行为"
+
+  - slot_id: "S003"
+    slot_name: "野生动物对象"
+    analysis_level: 1
+    required: true
+    role: "定性"
+    semantic_scope: "行为对象是国家重点保护的珍贵、濒危野生动物及其制品，或在野外环境自然生长繁殖的陆生野生动物"
+
+  - slot_id: "S004_A"
+    slot_name: "非法猎捕行为"
+    analysis_level: 1
+    required: false
+    role: "定性"
+    semantic_scope: "非法猎捕、杀害国家重点保护的珍贵、濒危野生动物的行为"
+
+  - slot_id: "S004_B"
+    slot_name: "非法收购运输出售行为"
+    analysis_level: 1
+    required: false
+    role: "定性"
+    semantic_scope: "非法收购、运输、出售国家重点保护的珍贵、濒危野生动物及其制品的行为"
+
+  - slot_id: "S005"
+    slot_name: "禁猎区禁猎期"
+    analysis_level: 1
+    required: false
+    role: "定性"
+    semantic_scope: "在禁猎区、禁猎期进行狩猎活动"
+
+  - slot_id: "S006"
+    slot_name: "禁用工具方法"
+    analysis_level: 1
+    required: false
+    role: "定性"
+    semantic_scope: "使用禁用的工具、方法进行狩猎，如投毒、电击、炸药等"
+
+  - slot_id: "S007"
+    slot_name: "食用目的"
+    analysis_level: 1
+    required: false
+    role: "定性"
+    semantic_scope: "以食用为目的非法猎捕、收购、运输、出售陆生野生动物"
+
+  - slot_id: "S008"
+    slot_name: "破坏资源后果"
+    analysis_level: 1
+    required: false
+    role: "定性"
+    semantic_scope: "破坏野生动物资源，造成生态环境损害"
+
+  # === 第二级：排除阻却事由 ===
+  - slot_id: "S101"
+    slot_name: "合法许可"
+    analysis_level: 2
+    required: false
+    role: "排除"
+    semantic_scope: "持有合法的狩猎许可证、驯养繁殖许可证或经营利用许可证"
+
+  - slot_id: "S102"
+    slot_name: "科研目的"
+    analysis_level: 2
+    required: false
+    role: "排除"
+    semantic_scope: "经批准为科学研究、人工繁殖、展览等特殊目的而进行的合法活动"
+
+  # === 第三级：量刑情节 ===
+  - slot_id: "S201"
+    slot_name: "情节严重"
+    analysis_level: 3
+    required: false
+    role: "统计"
+    semantic_scope: "数量较大、价值较高、多次实施、组织他人实施等情节严重情形"
+
+  - slot_id: "S202"
+    slot_name: "情节特别严重"
+    analysis_level: 3
+    required: false
+    role: "统计"
+    semantic_scope: "数量巨大、价值极高、造成严重后果、跨境犯罪等情节特别严重情形"
+
+  - slot_id: "S203"
+    slot_name: "自首情节"
+    analysis_level: 3
+    required: false
+    role: "统计"
+    semantic_scope: "犯罪以后自动投案，如实供述自己的罪行"
+
+# 罪名定义（第三百四十一条）
+crimes:
+  - crime_id: "C341_1"
+    crime_name: "危害珍贵、濒危野生动物罪"
+    applicable_case_type: "criminal"
+    required_slots: ["S001", "S002", "S003"]
+    optional_slots: ["S004_A", "S004_B", "S201", "S202", "S203"]
+    exclusion_slots: ["S101", "S102"]
+    explanation_template: |
+      根据《中华人民共和国刑法》第三百四十一条第一款规定：
+      非法猎捕、杀害国家重点保护的珍贵、濒危野生动物的，或者非法收购、运输、出售国家重点保护的珍贵、濒危野生动物及其制品的，处五年以下有期徒刑或者拘役，并处罚金；情节严重的，处五年以上十年以下有期徒刑，并处罚金；情节特别严重的，处十年以上有期徒刑，并处罚金或者没收财产。
+      
+      本案分析：{slot_analysis}。
+
+  - crime_id: "C341_2"
+    crime_name: "非法狩猎罪"
+    applicable_case_type: "criminal"
+    required_slots: ["S001", "S002", "S008"]
+    optional_slots: ["S005", "S006", "S203"]
+    exclusion_slots: ["S101"]
+    explanation_template: |
+      根据《中华人民共和国刑法》第三百四十一条第二款规定：
+      违反狩猎法规，在禁猎区、禁猎期或者使用禁用的工具、方法进行狩猎，破坏野生动物资源，情节严重的，处三年以下有期徒刑、拘役、管制或者罚金。
+      
+      本案分析：{slot_analysis}。
+
+  - crime_id: "C341_3"
+    crime_name: "非法猎捕、收购、运输、出售陆生野生动物罪"
+    applicable_case_type: "criminal"
+    required_slots: ["S001", "S002", "S007"]
+    optional_slots: ["S004_A", "S004_B", "S203"]
+    exclusion_slots: ["S101", "S102"]
+    explanation_template: |
+      根据《中华人民共和国刑法》第三百四十一条第三款规定：
+      违反野生动物保护管理法规，以食用为目的非法猎捕、收购、运输、出售第一款规定以外的在野外环境自然生长繁殖的陆生野生动物，情节严重的，依照第二款的规定处罚。
+      
+      本案分析：{slot_analysis}。
