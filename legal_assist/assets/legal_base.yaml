@@ -103,6 +103,7 @@ slots:
     required: false
     role: "统计"
     semantic_scope: "数量较大、价值较高、多次实施、组织他人实施等情节严重情形"
+    sentencing_type: "aggravating"
 
   - slot_id: "S202"
     slot_name: "情节特别严重"
@@ -110,6 +111,7 @@ slots:
     required: false
     role: "统计"
     semantic_scope: "数量巨大、价值极高、造成严重后果、跨境犯罪等情节特别严重情形"
+    sentencing_type: "aggravating"
 
   - slot_id: "S203"
     slot_name: "自首情节"
@@ -117,6 +119,7 @@ slots:
     required: false
     role: "统计"
     semantic_scope: "犯罪以后自动投案，如实供述自己的罪行"
+    sentencing_type: "mitigating"
 
 # 罪名定义（第三百四十一条）
 crimes:

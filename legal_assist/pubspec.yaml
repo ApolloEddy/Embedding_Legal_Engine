@@ -1,7 +1,7 @@
 name: legal_assist
 description: "Legal Assist - 法律案件分析主程序，用于案件事实提取和罪名分析"
 publish_to: 'none'
-version: 1.0.0+1
+version: 0.2.0+1
 
 environment:
   sdk: ^3.10.4
@@ -38,6 +38,15 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.3
+
+# 应用图标配置
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "LOGO.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "LOGO.png"
 
 flutter:
   uses-material-design: true

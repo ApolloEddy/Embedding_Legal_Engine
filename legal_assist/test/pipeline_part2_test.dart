@@ -1,10 +1,9 @@
-
 import 'dart:io';
 import 'dart:convert';
 import 'package:legal_engine_shared/legal_engine_shared.dart';
-import 'package:program_b/services/asset_loader_service.dart';
-import 'package:program_b/services/llm_extraction_service.dart';
-import 'package:program_b/engines/local_analysis_engine.dart';
+import 'package:legal_assist/services/asset_loader_service.dart';
+import 'package:legal_assist/services/llm_extraction_service.dart';
+import 'package:legal_assist/engines/local_analysis_engine.dart';
 import 'package:path/path.dart' as p;
 
 // 引入 services 需要的 http client (如果是 dart:io 环境，http 包能自动处理)
@@ -102,22 +101,26 @@ void main() async {
   bool passed = true;
   
   // 检查是否输出了结果
-  if (result.crimeResults.isEmpty) {
+  if (result.crimeAnalyses.isEmpty) {
     print('❌ 错误: 没有产生任何罪名分析结果');
     exit(1);
   }
   
   // 查找 C341_1 (危害珍贵、濒危野生动物罪)
-  final c341_1 = result.crimeResults.firstWhere(
+  final c341_1 = result.crimeAnalyses.firstWhere(
     (r) => r.crimeId == 'C341_1', 
-    orElse: () => CrimeAnalysisResult(
+    orElse: () => TieredCrimeAnalysis(
       crimeId: 'NotFound', 
       crimeName: '', 
+      coreElements: CoreElementsResult(
+        hitSlots: [],
+        missingSlots: [],
+        uncertainSlots: [],
+        coverageScore: 0,
+        isPreliminaryConstituted: false,
+      ),
+      finalConclusion: CrimeConclusion.uncertain,
       overallScore: 0, 
-      hitRequiredSlots: [], 
-      missingRequiredSlots: [], 
-      hitExclusionSlots: [], 
-      uncertainSlots: [],
       explanationText: '',
     )
   );
@@ -126,37 +129,40 @@ void main() async {
     print('❌ 错误: 未找到 C341_1 分析结果');
     passed = false;
   } else {
-    print('\n=== C341_1 详细分析报告 ===');
+    print('\n=== C341_1 分层分析报告 ===');
     print('匹配度: ${(c341_1.overallScore * 100).toStringAsFixed(1)}%');
+    print('最终结论: ${c341_1.finalConclusion.name}');
+    
+    // L1: 核心要件
+    print('\n[L1 核心要件]');
+    print('  初步判定: ${c341_1.coreElements.isPreliminaryConstituted ? "可能构成" : "不满足"}');
     
     void printSlots(String label, List<SlotMatchResult> slots) {
       if (slots.isEmpty) return;
-      print('$label:');
+      print('  $label:');
       for (final s in slots) {
         final score = s.similarityScore != null ? (s.similarityScore! * 100).toStringAsFixed(1) : 'N/A';
-        print('  - ${s.slotId} (${s.slotName}): $score% - ${s.statusReason}');
+        print('    - ${s.slotId} (${s.slotName}): $score% - ${s.statusReason}');
       }
     }
 
-    printSlots('✅ 命中要件', c341_1.hitRequiredSlots);
-    printSlots('❌ 缺失要件', c341_1.missingRequiredSlots);
-    printSlots('⚠️ 不确定要件', c341_1.uncertainSlots);
+    printSlots('✅ 命中要件', c341_1.coreElements.hitSlots);
+    printSlots('❌ 缺失要件', c341_1.coreElements.missingSlots);
+    printSlots('⚠️ 不确定要件', c341_1.coreElements.uncertainSlots);
     
-    // 检查 S003
-    if (c341_1.missingRequiredSlots.any((s) => s.slotId == 'S003')) {
-       // 再深入看看 S003 为什么缺失
-       print('\n[DEBUG] S003 缺失原因排查:');
-       final s003Extraction = extraction.getExtractionBySlotId('S003');
-       if (s003Extraction == null) {
-         print('  -> 根本没有为 S003 创建 Extraction 条目');
-       } else if (s003Extraction.slotText == null) {
-         print('  -> S003 未提取到文本 (slotText is null)');
-       } else if (!s003Extraction.hasEmbedding) {
-         print('  -> S003 有文本但无 Embedding');
-       } else {
-         print('  -> S003 有文本和 Embedding，但相似度过低');
-         print('  -> 提取文本: ${s003Extraction.slotText}');
-       }
+    // L2: 排除事由
+    if (c341_1.exclusionAnalysis != null) {
+      print('\n[L2 排除事由]');
+      print('  是否排除: ${c341_1.exclusionAnalysis!.isExcluded}');
+      printSlots('存在排除事由', c341_1.exclusionAnalysis!.hitExclusions);
+    }
+    
+    // L3: 量刑情节
+    if (c341_1.sentencingAnalysis != null) {
+      print('\n[L3 量刑情节]');
+      print('  量刑等级: ${c341_1.sentencingAnalysis!.sentencingLevel.name}');
+      printSlots('加重情节', c341_1.sentencingAnalysis!.aggravatingFactors);
+      printSlots('减轻情节', c341_1.sentencingAnalysis!.mitigatingFactors);
     }
   }
 

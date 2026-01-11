@@ -257,18 +257,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const Divider(),
             // 分析层级
-            ListTile(
-              title: const Text('分析层级'),
-              subtitle: const Text('控制参与分析的要素范围'),
-              trailing: DropdownButton<int>(
-                value: provider.analysisLevel,
-                items: [1, 2, 3].map((l) => DropdownMenuItem(
-                  value: l,
-                  child: Text('第 $l 级'),
-                )).toList(),
-                onChanged: (v) => provider.setAnalysisLevel(v!),
+            // 自适应分层分析说明
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.auto_awesome, color: Colors.blue, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '采用自适应分层分析：系统自动执行 L1核心要件 → L2阻却事由 → L3量刑情节 的全量分析',
+                      style: TextStyle(color: Colors.blue, fontSize: 12),
+                    ),
+                  ),
+                ],
               ),
             ),
+            const SizedBox(height: 16),
             // 相似度阈值
             ListTile(
               title: Text('相似度阈值: ${(provider.similarityThreshold * 100).toInt()}%'),

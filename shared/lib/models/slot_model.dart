@@ -19,6 +19,16 @@ enum SlotRole {
   statistics,
 }
 
+/// 量刑类型（仅 Level 3 统计类 Slot 有效）
+enum SentencingType {
+  @JsonValue('aggravating')
+  aggravating, // 加重情节
+  @JsonValue('mitigating')
+  mitigating, // 减轻情节
+  @JsonValue('neutral')
+  neutral, // 中性/不影响
+}
+
 /// 构成要素 Slot 模型
 /// 
 /// Slot 是 embedding 的最小对齐单位，
@@ -47,6 +57,10 @@ class Slot extends Equatable {
   @JsonKey(name: 'semantic_scope')
   final String semanticScope;
 
+  /// 量刑类型（仅 Level 3 统计类有效）
+  @JsonKey(name: 'sentencing_type')
+  final SentencingType? sentencingType;
+
   const Slot({
     required this.slotId,
     required this.slotName,
@@ -54,6 +68,7 @@ class Slot extends Equatable {
     required this.required,
     required this.role,
     required this.semanticScope,
+    this.sentencingType,
   });
 
   factory Slot.fromJson(Map<String, dynamic> json) => _$SlotFromJson(json);
@@ -68,5 +83,7 @@ class Slot extends Equatable {
         required,
         role,
         semanticScope,
+        sentencingType,
       ];
 }
+

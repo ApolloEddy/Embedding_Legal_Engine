@@ -232,21 +232,50 @@ class LlmExtractionService {
     final slotExtractions = <SlotExtraction>[];
     final rawSlots = data['slot_extractions'] as List;
 
-    for (final item in rawSlots) {
+    // 4.1 收集需要计算 Embedding 的文本
+    final slotsToEmbed = <int, String>{}; // index -> text
+    
+    // 遍历原始数据，记录需要 embedding 的 slot 索引
+    for (int i = 0; i < rawSlots.length; i++) {
+      final item = rawSlots[i];
+      final slotText = item['slot_text'] as String?;
+      if (slotText != null && slotText.isNotEmpty) {
+        slotsToEmbed[i] = slotText;
+      }
+    }
+    
+    // 4.2 批量计算 Embedding (仅发起一次 HTTP 请求)
+    Map<int, List<double>> embeddingsMap = {};
+    if (slotsToEmbed.isNotEmpty) {
+      try {
+        print('  正在批量计算 ${slotsToEmbed.length} 个 Embeddings...');
+        final texts = slotsToEmbed.values.toList();
+        final vectors = await _batchComputeEmbeddings(texts);
+        
+        // 将结果映射回 index
+        int vectorIndex = 0;
+        for (final originalIndex in slotsToEmbed.keys) {
+          embeddingsMap[originalIndex] = vectors[vectorIndex];
+          vectorIndex++;
+        }
+      } catch (e) {
+        print('Batch Embedding 计算失败: $e');
+        // 失败处理：可以选择抛出或降级。这里抛出，因为没有 embedding 后续无法分析。
+        throw e;
+      }
+    }
+
+    // 4.3 组装结果对象
+    for (int i = 0; i < rawSlots.length; i++) {
+      final item = rawSlots[i];
       final slotId = item['slot_id'] as String;
       final slotText = item['slot_text'] as String?;
       final confidence = (item['confidence'] as num?)?.toDouble();
 
-      List<double>? embedding;
-      if (slotText != null && slotText.isNotEmpty) {
-        // 计算 Embedding
-        embedding = await _computeEmbedding(slotText);
-      }
-
       slotExtractions.add(SlotExtraction(
         slotId: slotId,
         slotText: slotText,
-        slotEmbedding: embedding,
+        slotEmbedding: embeddingsMap[i], // 从 map 中获取结果
         confidence: confidence,
       ));
     }
@@ -272,16 +301,19 @@ class LlmExtractionService {
     );
   }
 
-  /// 计算 Embedding
-  Future<List<double>> _computeEmbedding(String text) async {
+  /// 批量计算 Embedding
+  Future<List<List<double>>> _batchComputeEmbeddings(List<String> texts) async {
     if (config.apiEndpoint.contains('dashscope')) {
-      return _computeAliyunEmbedding(text);
+      return _batchComputeAliyunEmbeddings(texts);
     } else {
-      return _computeOpenAIEmbedding(text);
+      // 兼容旧逻辑，如果没有批量实现，可以循环调用 _computeOpenAIEmbedding
+      // 但 OpenAI 其实也支持 batch (input 传数组)
+      // 这里暂时只实现 Aliyun 的批量
+      throw UnimplementedError('OpenAI Batch Embedding not implemented');
     }
   }
 
-  Future<List<double>> _computeAliyunEmbedding(String text) async {
+  Future<List<List<double>>> _batchComputeAliyunEmbeddings(List<String> texts) async {
     final response = await _httpClient.post(
       Uri.parse(config.apiEndpoint),
       headers: {
@@ -290,18 +322,37 @@ class LlmExtractionService {
       },
       body: jsonEncode({
         'model': config.embeddingModel,
-        'input': {'texts': [text]},
+        'input': {'texts': texts},
         'parameters': {'dimension': config.embeddingDimension},
       }),
     );
 
     if (response.statusCode != 200) {
-      throw Exception('Aliyun Embedding API 错误: ${response.statusCode}');
+      throw Exception('Aliyun Embedding API 错误: ${response.statusCode} - ${response.body}');
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;
-    final embeddings = json['output']['embeddings'] as List;
-    return (embeddings[0]['embedding'] as List).map((v) => (v as num).toDouble()).toList();
+    if (json['output'] == null || json['output']['embeddings'] == null) {
+        throw Exception('Aliyun 响应格式异常: ${response.body}');
+    }
+
+    final embeddingsList = json['output']['embeddings'] as List;
+    
+    // 确保返回的顺序是正确的 (DashScope 保证顺序，且每个 embedding 对象有 text_index)
+    // 我们按照 text_index 排序以防万一
+    embeddingsList.sort((a, b) => (a['text_index'] as int).compareTo(b['text_index'] as int));
+
+    final result = <List<double>>[];
+    for (var item in embeddingsList) {
+       final vec = (item['embedding'] as List).map((v) => (v as num).toDouble()).toList();
+       result.add(vec);
+    }
+    
+    if (result.length != texts.length) {
+       print('警告: 请求了 ${texts.length} 个文本的 embedding，但返回了 ${result.length} 个结果');
+    }
+
+    return result;
   }
 
   Future<List<double>> _computeOpenAIEmbedding(String text) async {

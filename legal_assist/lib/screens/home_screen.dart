@@ -18,6 +18,9 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+  
+  /// 侧边栏是否展开（平板/桌面端）
+  bool _isRailExtended = true;
 
   final List<Widget> _screens = const [
     CaseInputScreen(),
@@ -26,6 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
   ];
 
   static const double _mobileBreakpoint = 600;
+  static const double _tabletBreakpoint = 900;
 
   @override
   Widget build(BuildContext context) {
@@ -57,11 +61,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// 桌面端布局（侧边导航）
   Widget _buildDesktopLayout() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    // 平板竖版默认收起侧栏
+    final isTabletPortrait = screenWidth < _tabletBreakpoint;
+    
     return Row(
       children: [
         // 侧边导航栏
         NavigationRail(
-          extended: true,
+          extended: isTabletPortrait ? _isRailExtended : true,
           minExtendedWidth: 200,
           selectedIndex: _selectedIndex,
           onDestinationSelected: (index) {
@@ -69,6 +77,20 @@ class _HomeScreenState extends State<HomeScreen> {
               _selectedIndex = index;
             });
           },
+          // 添加折叠按钮（仅平板竖版显示）
+          trailing: isTabletPortrait ? Expanded(
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: IconButton(
+                  icon: Icon(_isRailExtended ? Icons.chevron_left : Icons.chevron_right),
+                  onPressed: () => setState(() => _isRailExtended = !_isRailExtended),
+                  tooltip: _isRailExtended ? '收起侧栏' : '展开侧栏',
+                ),
+              ),
+            ),
+          ) : null,
           leading: Padding(
             padding: const EdgeInsets.symmetric(vertical: 24),
             child: Column(

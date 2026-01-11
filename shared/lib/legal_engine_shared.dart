@@ -8,6 +8,7 @@ export 'models/crime_model.dart';
 export 'models/embedding_package_model.dart';
 export 'models/case_extraction_model.dart';
 export 'models/analysis_result_model.dart';
+export 'models/tiered_analysis_model.dart';
 
 // Schemas
 export 'schemas/json_schemas.dart';

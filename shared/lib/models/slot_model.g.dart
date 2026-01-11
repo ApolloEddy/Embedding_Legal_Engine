@@ -13,6 +13,8 @@ Slot _$SlotFromJson(Map<String, dynamic> json) => Slot(
       required: json['required'] as bool,
       role: $enumDecode(_$SlotRoleEnumMap, json['role']),
       semanticScope: json['semantic_scope'] as String,
+      sentencingType:
+          $enumDecodeNullable(_$SentencingTypeEnumMap, json['sentencing_type']),
     );
 
 Map<String, dynamic> _$SlotToJson(Slot instance) => <String, dynamic>{
@@ -22,6 +24,7 @@ Map<String, dynamic> _$SlotToJson(Slot instance) => <String, dynamic>{
       'required': instance.required,
       'role': _$SlotRoleEnumMap[instance.role]!,
       'semantic_scope': instance.semanticScope,
+      'sentencing_type': _$SentencingTypeEnumMap[instance.sentencingType],
     };
 
 const _$SlotRoleEnumMap = {
@@ -29,4 +32,10 @@ const _$SlotRoleEnumMap = {
   SlotRole.exclusion: '排除',
   SlotRole.explanation: '解释',
   SlotRole.statistics: '统计',
+};
+
+const _$SentencingTypeEnumMap = {
+  SentencingType.aggravating: 'aggravating',
+  SentencingType.mitigating: 'mitigating',
+  SentencingType.neutral: 'neutral',
 };

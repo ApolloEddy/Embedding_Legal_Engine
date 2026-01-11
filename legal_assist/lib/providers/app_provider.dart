@@ -37,13 +37,10 @@ class AppProvider extends ChangeNotifier {
   CaseExtraction? _caseExtraction;
   CaseExtraction? get caseExtraction => _caseExtraction;
 
-  AnalysisResult? _analysisResult;
-  AnalysisResult? get analysisResult => _analysisResult;
+  TieredAnalysisResult? _tieredResult;
+  TieredAnalysisResult? get tieredResult => _tieredResult;
 
-  // 分析配置
-  int _analysisLevel = 1;
-  int get analysisLevel => _analysisLevel;
-
+  // 分析配置（自适应分层，不再需要 analysisLevel）
   double _similarityThreshold = 0.45;
   double get similarityThreshold => _similarityThreshold;
 
@@ -270,14 +267,8 @@ class AppProvider extends ChangeNotifier {
     _caseText = text;
     // 重置之前的分析结果
     _caseExtraction = null;
-    _analysisResult = null;
+    _tieredResult = null;
     _currentPhase = 1;
-    notifyListeners();
-  }
-
-  /// 设置分析层级
-  void setAnalysisLevel(int level) {
-    _analysisLevel = level;
     notifyListeners();
   }
 
@@ -341,11 +332,11 @@ class AppProvider extends ChangeNotifier {
     try {
       // Phase 3 是 100% 本地、确定性、白箱过程
       // 禁止调用 LLM、生成新的 embedding、修改 yaml
-      _analysisResult = _analysisEngine.analyze(
+      // 自适应分层分析（自动执行 L1→L2→L3）
+      _tieredResult = _analysisEngine.analyze(
         yamlBase: yamlBase!,
         legalEmbeddings: embeddingPackage!,
         caseExtraction: _caseExtraction!,
-        analysisLevel: _analysisLevel,
         threshold: _similarityThreshold,
       );
       _setSuccess('分析完成');
@@ -358,7 +349,7 @@ class AppProvider extends ChangeNotifier {
   void resetAnalysis() {
     _caseText = '';
     _caseExtraction = null;
-    _analysisResult = null;
+    _tieredResult = null;
     _currentPhase = 1;
     _clearMessages();
     notifyListeners();
