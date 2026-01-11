@@ -75,13 +75,27 @@ class LocalAnalysisEngine {
     required double threshold,
     required double margin,
   }) {
+    // 过滤要件：仅分析在 analysisSlots 中的 slot
+    final effectiveRequiredIds = crime.requiredSlots
+        .where((id) => analysisSlots.any((s) => s.slotId == id))
+        .toList();
+        
+    final effectiveExclusionIds = crime.exclusionSlots
+        .where((id) => analysisSlots.any((s) => s.slotId == id))
+        .toList();
+
+    final effectiveOptionalIds = crime.optionalSlots
+        .where((id) => analysisSlots.any((s) => s.slotId == id))
+        .toList();
+
     final hitRequired = <SlotMatchResult>[];
     final missingRequired = <SlotMatchResult>[];
     final hitExclusion = <SlotMatchResult>[];
+    final hitOptional = <SlotMatchResult>[];
     final uncertainSlots = <SlotMatchResult>[];
 
     // 分析必需要件
-    for (final slotId in crime.requiredSlots) {
+    for (final slotId in effectiveRequiredIds) {
       final matchResult = _matchSlot(
         slotId: slotId,
         yamlBase: yamlBase,
@@ -105,7 +119,7 @@ class LocalAnalysisEngine {
     }
 
     // 分析排除要件
-    for (final slotId in crime.exclusionSlots) {
+    for (final slotId in effectiveExclusionIds) {
       final matchResult = _matchSlot(
         slotId: slotId,
         yamlBase: yamlBase,
@@ -119,26 +133,51 @@ class LocalAnalysisEngine {
         hitExclusion.add(matchResult);
       }
     }
+    
+    // 分析可选要件 (量刑情节)
+    for (final slotId in effectiveOptionalIds) {
+      final matchResult = _matchSlot(
+        slotId: slotId,
+        yamlBase: yamlBase,
+        legalEmbeddings: legalEmbeddings,
+        caseExtraction: caseExtraction,
+        threshold: threshold,
+        margin: margin,
+      );
 
-    // 计算综合分数
-    final totalRequired = crime.requiredSlots.length;
-    final overallScore = totalRequired > 0
-        ? hitRequired.length / totalRequired
+      if (matchResult.status == SlotMatchStatus.hit) {
+        hitOptional.add(matchResult);
+      } else if (matchResult.status == SlotMatchStatus.uncertain) {
+        // 可选要件的不确定也记录下来? 目前模型只支持单一 uncertainSlots 列表
+        // 我们可以选择记录或者忽略。为了信息完整，记录到 uncertainSlots
+        uncertainSlots.add(matchResult);
+      }
+    }
+
+    // 计算综合分数 (仅基于必需要件)
+    final totalRequired = crime.requiredSlots.length; // 注意：分母仍应是总必要要件数，还是当前层级的？
+    // 通常分数反映的是"该罪名构成的完整度"。如果 analysisLevel=1，我们只判断核心要件。
+    // 建议：分母使用 effectiveRequiredIds.length，如果为0则为0.0
+    final effectiveTotal = effectiveRequiredIds.length;
+    final overallScore = effectiveTotal > 0
+        ? hitRequired.length / effectiveTotal
         : 0.0;
 
     // 判断是否构成该罪
     bool? isConstituted;
     if (hitExclusion.isNotEmpty) {
-      // 存在排除事由
+      // 存在排除事由 -> 不构成
       isConstituted = false;
-    } else if (missingRequired.isEmpty && uncertainSlots.isEmpty) {
-      // 所有必需要件都命中
+    } else if (missingRequired.isEmpty && uncertainSlots.where((s) => crime.requiredSlots.contains(s.slotId)).isEmpty) {
+      // 所有"有效"必需要件都命中，且没有必需要件处于不确定状态
+      // 注意：uncertainSlots 可能包含 optional slots，这些不应影响 isConstituted
+      // 只有 required slots 的 uncertain 才会导致 isConstituted = null
       isConstituted = true;
     } else if (missingRequired.isNotEmpty) {
-      // 存在缺失的必需要件
+      // 存在缺失的必需要件 -> 不构成
       isConstituted = false;
     } else {
-      // 存在不确定要件
+      // 存在不确定的必需要件 -> 待定
       isConstituted = null;
     }
 
@@ -148,6 +187,7 @@ class LocalAnalysisEngine {
       hitRequired: hitRequired,
       missingRequired: missingRequired,
       hitExclusion: hitExclusion,
+      hitOptional: hitOptional,
     );
 
     return CrimeAnalysisResult(
@@ -261,6 +301,7 @@ class LocalAnalysisEngine {
     required List<SlotMatchResult> hitRequired,
     required List<SlotMatchResult> missingRequired,
     required List<SlotMatchResult> hitExclusion,
+    required List<SlotMatchResult> hitOptional,
   }) {
     final buffer = StringBuffer();
 
@@ -271,13 +312,13 @@ class LocalAnalysisEngine {
     final slotAnalysis = StringBuffer();
 
     if (hitRequired.isNotEmpty) {
-      slotAnalysis.write('已认定要件: ');
+      slotAnalysis.write('已认定核心要件: ');
       slotAnalysis.write(hitRequired.map((s) => s.slotName).join('、'));
     }
 
     if (missingRequired.isNotEmpty) {
       if (slotAnalysis.isNotEmpty) slotAnalysis.write('；');
-      slotAnalysis.write('缺失要件: ');
+      slotAnalysis.write('缺失核心要件: ');
       slotAnalysis.write(missingRequired.map((s) => s.slotName).join('、'));
     }
 
@@ -285,6 +326,12 @@ class LocalAnalysisEngine {
       if (slotAnalysis.isNotEmpty) slotAnalysis.write('；');
       slotAnalysis.write('存在排除事由: ');
       slotAnalysis.write(hitExclusion.map((s) => s.slotName).join('、'));
+    }
+    
+    if (hitOptional.isNotEmpty) {
+      if (slotAnalysis.isNotEmpty) slotAnalysis.write('；');
+      slotAnalysis.write('具备量刑/加重情节: ');
+      slotAnalysis.write(hitOptional.map((s) => s.slotName).join('、'));
     }
 
     template = template.replaceAll('{slot_analysis}', slotAnalysis.toString());

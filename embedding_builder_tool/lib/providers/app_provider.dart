@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:legal_engine_shared/legal_engine_shared.dart';
 import '../services/yaml_service.dart';
@@ -22,6 +23,10 @@ class AppProvider extends ChangeNotifier {
   // LLM 配置
   LlmConfig? _llmConfig;
   LlmConfig? get llmConfig => _llmConfig;
+
+  // 配置来源（用于 UI 显示）
+  String? _configSource;
+  String? get configSource => _configSource;
 
   // 法律条文
   List<LawArticle> _articles = [];
@@ -65,6 +70,25 @@ class AppProvider extends ChangeNotifier {
   Future<void> _loadSavedState() async {
     final prefs = await SharedPreferences.getInstance();
     
+    // 1. 桌面端优先尝试从 secrets.yaml 自动加载
+    if (!Platform.isAndroid && !Platform.isIOS) {
+      try {
+        final aliyunConfig = await SecretsLoader.getAliyunConfig();
+        final config = LlmConfig.aliyunDashScope(
+          apiKey: aliyunConfig.apiKey,
+          model: aliyunConfig.embeddingModel,
+          dimension: aliyunConfig.embeddingDimension,
+        );
+        configureLlm(config);
+        _configSource = '自动加载自 secrets.yaml';
+        notifyListeners();
+        return; // 成功加载，跳过 SharedPreferences
+      } catch (e) {
+        print('secrets.yaml 加载跳过: $e');
+      }
+    }
+    
+    // 2. 回退到 SharedPreferences
     final apiKey = prefs.getString(_keyApiKey);
     final model = prefs.getString(_keyModel);
     final dim = prefs.getInt(_keyDim);
@@ -76,6 +100,7 @@ class AppProvider extends ChangeNotifier {
         dimension: dim ?? 1024,
       );
       configureLlm(config);
+      _configSource = '已保存的配置';
     }
   }
 

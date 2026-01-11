@@ -12,6 +12,9 @@ class CaseInputScreen extends StatefulWidget {
 
 class _CaseInputScreenState extends State<CaseInputScreen> {
   final _caseTextController = TextEditingController();
+  
+  /// 平板/桌面断点
+  static const double _tabletBreakpoint = 768;
 
   @override
   void dispose() {
@@ -21,10 +24,13 @@ class _CaseInputScreenState extends State<CaseInputScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWide = screenWidth >= _tabletBreakpoint;
+    
     return Consumer<AppProvider>(
       builder: (context, provider, _) {
         return Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(isWide ? 16 : 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -50,24 +56,40 @@ class _CaseInputScreenState extends State<CaseInputScreen> {
               if (provider.yamlBase == null || provider.embeddingPackage == null)
                 _buildAssetWarning(context, provider),
               const SizedBox(height: 16),
-              // 案情输入区域
+              // 案情输入区域 - 响应式布局
               Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 左侧：输入区
-                    Expanded(
-                      flex: 2,
-                      child: _buildInputArea(context, provider),
-                    ),
-                    const SizedBox(width: 16),
-                    // 右侧：提取结果预览
-                    Expanded(
-                      flex: 1,
-                      child: _buildExtractionPreview(context, provider),
-                    ),
-                  ],
-                ),
+                child: isWide
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // 左侧：输入区
+                          Expanded(
+                            flex: 2,
+                            child: _buildInputArea(context, provider),
+                          ),
+                          const SizedBox(width: 16),
+                          // 右侧：提取结果预览
+                          Expanded(
+                            flex: 1,
+                            child: _buildExtractionPreview(context, provider),
+                          ),
+                        ],
+                      )
+                    : Column(
+                        children: [
+                          // 上部：输入区
+                          Expanded(
+                            flex: 3,
+                            child: _buildInputArea(context, provider),
+                          ),
+                          const SizedBox(height: 12),
+                          // 下部：提取结果预览（可折叠）
+                          Expanded(
+                            flex: 2,
+                            child: _buildExtractionPreview(context, provider),
+                          ),
+                        ],
+                      ),
               ),
             ],
           ),

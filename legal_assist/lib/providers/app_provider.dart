@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:legal_engine_shared/legal_engine_shared.dart';
 import '../services/asset_loader_service.dart';
@@ -24,6 +25,10 @@ class AppProvider extends ChangeNotifier {
   // LLM 配置
   LlmConfig? _llmConfig;
   LlmConfig? get llmConfig => _llmConfig;
+
+  // 配置来源（用于 UI 显示）
+  String? _configSource;
+  String? get configSource => _configSource;
 
   // 案件分析状态
   String _caseText = '';
@@ -73,33 +78,70 @@ class AppProvider extends ChangeNotifier {
   Future<void> _loadSavedState() async {
     final prefs = await SharedPreferences.getInstance();
     
-    // 1. 恢复 LLM 配置
-    final apiKey = prefs.getString(_keyApiKey);
-    final model = prefs.getString(_keyModel);
-    final dim = prefs.getInt(_keyDim);
+    // 1. Android/iOS: 优先尝试加载内置资产
+    if (Platform.isAndroid || Platform.isIOS) {
+      await _tryLoadBundledAssets();
+      
+      // 如果内置资产加载成功，只恢复 LLM 配置
+      if (yamlBase != null && embeddingPackage != null) {
+        final apiKey = prefs.getString(_keyApiKey);
+        if (apiKey != null && apiKey.isNotEmpty) {
+          final model = prefs.getString(_keyModel);
+          final dim = prefs.getInt(_keyDim);
+          final config = LlmConfig.aliyunDashScope(
+            apiKey: apiKey,
+            model: model ?? 'text-embedding-v4',
+            dimension: dim ?? 1024,
+          );
+          configureLlm(config);
+          _configSource = '已保存的配置';
+        }
+        return; // 移动端完成初始化
+      }
+    }
     
-    if (apiKey != null && apiKey.isNotEmpty) {
-      final config = LlmConfig.aliyunDashScope(
-        apiKey: apiKey,
-        model: model ?? 'text-embedding-v4',
-        dimension: dim ?? 1024,
-      );
-      configureLlm(config);
+    // 2. 桌面端优先尝试从 secrets.yaml 自动加载 LLM 配置
+    if (!Platform.isAndroid && !Platform.isIOS) {
+      try {
+        final aliyunConfig = await SecretsLoader.getAliyunConfig();
+        final config = LlmConfig.aliyunDashScope(
+          apiKey: aliyunConfig.apiKey,
+          model: aliyunConfig.embeddingModel,
+          dimension: aliyunConfig.embeddingDimension,
+        );
+        configureLlm(config);
+        _configSource = '自动加载自 secrets.yaml';
+      } catch (e) {
+        print('secrets.yaml 加载跳过: $e');
+        // 回退到 SharedPreferences
+        final apiKey = prefs.getString(_keyApiKey);
+        if (apiKey != null && apiKey.isNotEmpty) {
+          final model = prefs.getString(_keyModel);
+          final dim = prefs.getInt(_keyDim);
+          final config = LlmConfig.aliyunDashScope(
+            apiKey: apiKey,
+            model: model ?? 'text-embedding-v4',
+            dimension: dim ?? 1024,
+          );
+          configureLlm(config);
+          _configSource = '已保存的配置';
+        }
+      }
     }
 
-    // 2. 恢复 YAML 路径
+    // 3. 桌面端恢复 YAML 路径
     final savedYamlPath = prefs.getString(_keyYamlPath);
     if (savedYamlPath != null) {
       await loadYamlBase(savedYamlPath);
     }
 
-    // 3. 恢复 Embedding 包
+    // 4. 桌面端恢复 Embedding 包
     final savedPakPath = prefs.getString(_keyPakPath);
     if (savedPakPath != null) {
       await loadEmbeddingPackage(savedPakPath);
     }
     
-    // 4. 如果没有保存的资产路径，尝试加载内置资产（Android APK场景）
+    // 5. 桌面端如果没有保存的资产路径，尝试加载内置资产
     if (yamlBase == null || embeddingPackage == null) {
       await _tryLoadBundledAssets();
     }

@@ -6,13 +6,19 @@ import '../providers/app_provider.dart';
 /// 分析结果页面
 class AnalysisResultScreen extends StatelessWidget {
   const AnalysisResultScreen({super.key});
+  
+  /// 平板/桌面断点
+  static const double _tabletBreakpoint = 768;
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWide = screenWidth >= _tabletBreakpoint;
+    
     return Consumer<AppProvider>(
       builder: (context, provider, _) {
         return Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(isWide ? 16 : 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -26,28 +32,29 @@ class AnalysisResultScreen extends StatelessWidget {
                   if (provider.analysisResult != null)
                     OutlinedButton.icon(
                       icon: const Icon(Icons.refresh),
-                      label: const Text('重新分析'),
+                      label: Text(isWide ? '重新分析' : '重分析'),
                       onPressed: () => provider.analyzeCase(),
                     ),
                 ],
               ),
               const SizedBox(height: 8),
-              Text(
-                'Phase 3 分析结果（100% 本地确定性算法，禁止调用 LLM）',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.outline,
-                    ),
-              ),
+              if (isWide)
+                Text(
+                  'Phase 3 分析结果（100% 本地确定性算法，禁止调用 LLM）',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                ),
               const SizedBox(height: 16),
               // 分析信息
               if (provider.analysisResult != null)
-                _buildAnalysisInfo(context, provider.analysisResult!),
+                _buildAnalysisInfo(context, provider.analysisResult!, isWide),
               const SizedBox(height: 16),
               // 主要内容
               Expanded(
                 child: provider.analysisResult == null
                     ? _buildEmptyState(context)
-                    : _buildResults(context, provider.analysisResult!),
+                    : _buildResults(context, provider.analysisResult!, isWide),
               ),
             ],
           ),
@@ -56,7 +63,25 @@ class AnalysisResultScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildAnalysisInfo(BuildContext context, AnalysisResult result) {
+  Widget _buildAnalysisInfo(BuildContext context, AnalysisResult result, bool isWide) {
+    if (!isWide) {
+      // 移动端：简化显示
+      return Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _buildInfoChip(context, '层级', '${result.analysisLevel}'),
+            _buildInfoChip(context, '阈值', '${(result.similarityThreshold * 100).toInt()}%'),
+          ],
+        ),
+      );
+    }
+    
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -108,13 +133,40 @@ class AnalysisResultScreen extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context).colorScheme.outline,
                 ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildResults(BuildContext context, AnalysisResult result) {
+  Widget _buildResults(BuildContext context, AnalysisResult result, bool isWide) {
+    if (!isWide) {
+      // 移动端：使用 TabBar 或 单列显示
+      return DefaultTabController(
+        length: 2,
+        child: Column(
+          children: [
+            const TabBar(
+              tabs: [
+                Tab(text: '罪名列表'),
+                Tab(text: '详细分析'),
+              ],
+            ),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  _buildCrimeList(context, result),
+                  _buildDetailPanel(context, result),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    // 桌面端：左右布局
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

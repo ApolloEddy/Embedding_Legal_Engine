@@ -84,6 +84,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
             const Divider(),
+            // 配置来源提示
+            if (provider.configSource != null)
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline, color: Colors.blue, size: 16),
+                    const SizedBox(width: 8),
+                    Text(
+                      '配置来源: ${provider.configSource}',
+                      style: const TextStyle(color: Colors.blue, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
             const SizedBox(height: 8),
             // 提供商选择
             DropdownButtonFormField<String>(
