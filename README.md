@@ -1,11 +1,15 @@
 # Legal Assist - 法律案件智能分析引擎
 
+[![Version](https://img.shields.io/badge/Version-Alpha%200.2.1--hotfix-blue)](https://github.com/ApolloEddy/Embedding_Legal_Engine/releases)
+[![License](https://img.shields.io/badge/License-Apache%202.0-green)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Android-lightgrey)](https://flutter.dev)
+
 <p align="center">
   <img src="legal_assist/LOGO.png" alt="Logo" width="120">
 </p>
 
 <p align="center">
-  <strong>Alpha 0.2.0</strong> | 基于语义嵌入的刑事案件定性与量刑分析系统
+  <strong>Alpha 0.2.1-hotfix</strong> | 基于语义嵌入的刑事案件定性与量刑分析系统
 </p>
 
 ---
@@ -22,6 +26,20 @@ Legal Assist 是一款创新的法律科技工具，采用**语义嵌入（Seman
 | 🚀 **高效** | 向量相似度计算毫秒级响应 |
 | 📦 **数据驱动** | 修改 YAML 即可扩展法律覆盖范围 |
 | 🔄 **动态更新** | 重建 Embedding 包即可更新语义匹配 |
+
+---
+
+## 运行指南 (Run Guide)
+
+### Web 端调试 (Web Support)
+
+由于浏览器安全策略（CORS）限制，直接在 Web 端调用 LLM API 时会出现 `ClientException: Failed to fetch` 错误。调试时请使用以下命令禁用 Chrome Web 安全策略：
+
+```bash
+flutter run -d chrome --web-browser-flag "--disable-web-security"
+```
+
+**注意**：此模式仅用于开发调试，切勿在浏览其它网页时保持开启。
 
 ---
 

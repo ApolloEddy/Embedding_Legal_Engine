@@ -9,6 +9,8 @@ export 'models/embedding_package_model.dart';
 export 'models/case_extraction_model.dart';
 export 'models/analysis_result_model.dart';
 export 'models/tiered_analysis_model.dart';
+export 'models/secrets_config.dart';
+export 'models/law_article_model.dart';
 
 // Schemas
 export 'schemas/json_schemas.dart';

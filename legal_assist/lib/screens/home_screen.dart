@@ -96,27 +96,22 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Theme.of(context).colorScheme.primary,
-                        Theme.of(context).colorScheme.secondary,
-                      ],
-                    ),
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
+                        color: Colors.black.withValues(alpha: 0.1),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
                     ],
                   ),
-                  child: const Icon(
-                    Icons.shield,  // 盾牌图标（公安风格）
-                    size: 32,
-                    color: Colors.white,
+                  child: Image.asset(
+                    'assets/LOGO.png',
+                    width: 40,
+                    height: 40,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -211,7 +206,18 @@ class _HomeScreenState extends State<HomeScreen> {
             bottom: false,
             child: Row(
               children: [
-                const Icon(Icons.shield, color: Colors.white, size: 24),
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Image.asset(
+                    'LOGO.png', 
+                    width: 24, 
+                    height: 24,
+                  ),
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'Legal Assist',

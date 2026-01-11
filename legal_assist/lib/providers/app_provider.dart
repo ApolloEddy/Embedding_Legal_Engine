@@ -1,4 +1,6 @@
-import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart';
+import 'package:file_picker/file_picker.dart';
+import '../utils/file_loader.dart';
 import 'package:flutter/material.dart';
 import 'package:legal_engine_shared/legal_engine_shared.dart';
 import '../services/asset_loader_service.dart';
@@ -76,7 +78,11 @@ class AppProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     
     // 1. Android/iOS: 优先尝试加载内置资产
-    if (Platform.isAndroid || Platform.isIOS) {
+    // Android/iOS 或 Web 环境下（如果 Web 也希望优先尝试内置）
+    // 这里保留移动端逻辑，Web 端也可以尝试加载内置资源
+    final isMobile = defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS;
+    
+    if (isMobile) {
       await _tryLoadBundledAssets();
       
       // 如果内置资产加载成功，只恢复 LLM 配置
@@ -97,9 +103,10 @@ class AppProvider extends ChangeNotifier {
       }
     }
     
-    // 2. 桌面端优先尝试从 secrets.yaml 自动加载 LLM 配置
-    if (!Platform.isAndroid && !Platform.isIOS) {
+    // 2. 桌面端和 Web 端优先尝试从 secrets.yaml 自动加载 LLM 配置
+    if (!isMobile) {
       try {
+        // Web 端 (assets) 和 Desktop 端 (文件系统) 统一通过 SecretsLoader 加载
         final aliyunConfig = await SecretsLoader.getAliyunConfig();
         final config = LlmConfig.aliyunDashScope(
           apiKey: aliyunConfig.apiKey,
@@ -126,16 +133,18 @@ class AppProvider extends ChangeNotifier {
       }
     }
 
-    // 3. 桌面端恢复 YAML 路径
-    final savedYamlPath = prefs.getString(_keyYamlPath);
-    if (savedYamlPath != null) {
-      await loadYamlBase(savedYamlPath);
-    }
+    // 3. 桌面端 (非 Web) 恢复 YAML 路径
+    if (!kIsWeb) {
+      final savedYamlPath = prefs.getString(_keyYamlPath);
+      if (savedYamlPath != null) {
+        await loadYamlBaseFromPath(savedYamlPath);
+      }
 
-    // 4. 桌面端恢复 Embedding 包
-    final savedPakPath = prefs.getString(_keyPakPath);
-    if (savedPakPath != null) {
-      await loadEmbeddingPackage(savedPakPath);
+      // 4. 桌面端 (非 Web) 恢复 Embedding 包
+      final savedPakPath = prefs.getString(_keyPakPath);
+      if (savedPakPath != null) {
+        await loadEmbeddingPackageFromPath(savedPakPath);
+      }
     }
     
     // 5. 桌面端如果没有保存的资产路径，尝试加载内置资产
@@ -149,8 +158,8 @@ class AppProvider extends ChangeNotifier {
     try {
       await _assetLoader.loadBundledAssets();
       if (_assetLoader.yamlBase != null && _assetLoader.embeddingPackage != null) {
-        _yamlPath = '[内置资产]';
-        _embeddingPath = '[内置资产]';
+        _yamlPath = 'assets/legal_base.yaml';
+        _embeddingPath = 'assets/embeddings/v4-embedding-criminal.pak';
         _setSuccess('已自动加载内置法律资产');
       }
     } catch (e) {
@@ -179,18 +188,22 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 加载 YAML 基座
-  Future<void> loadYamlBase(String filePath) async {
+  /// 加载 YAML 基座 (文件对象)
+  Future<void> loadYamlBase(PlatformFile file) async {
     _setLoading(true);
     _clearMessages();
 
     try {
-      await _assetLoader.loadYamlBase(filePath);
-      _yamlPath = filePath;
+      final content = await FileLoader.readAsString(file);
+      await _assetLoader.loadYamlFromContent(content);
       
-      // Save to prefs
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_keyYamlPath, filePath);
+      _yamlPath = file.path ?? file.name;
+      
+      // Save to prefs ONLY if path available (Desktop/Mobile)
+      if (file.path != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_keyYamlPath, file.path!);
+      }
 
       _setSuccess('YAML 基座加载成功: ${yamlBase!.slots.length} 个 Slot, ${yamlBase!.crimes.length} 个罪名');
     } catch (e) {
@@ -200,18 +213,27 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  /// 加载 Embedding 包
-  Future<void> loadEmbeddingPackage(String filePath) async {
+  /// 加载 YAML 基座 (路径) - 仅限 Desktop
+  Future<void> loadYamlBaseFromPath(String filePath) async {
+    // 构造一个包装 PlatformFile，仅用于传递 path
+    await loadYamlBase(PlatformFile(name: 'base.yaml', path: filePath, size: 0));
+  }
+
+  /// 加载 Embedding 包 (文件对象)
+  Future<void> loadEmbeddingPackage(PlatformFile file) async {
     _setLoading(true);
     _clearMessages();
 
     try {
-      await _assetLoader.loadEmbeddingPackage(filePath);
-      _embeddingPath = filePath;
+      final content = await FileLoader.readAsString(file);
+      await _assetLoader.loadEmbeddingPackageFromContent(content);
+      _embeddingPath = file.path ?? file.name;
 
-      // Save to prefs
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_keyPakPath, filePath);
+      // Save to prefs only if path exists
+      if (file.path != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_keyPakPath, file.path!);
+      }
 
       // 验证资产一致性（包括模型和维度）
       final validation = _assetLoader.validateAssetConsistency(
@@ -228,6 +250,11 @@ class AppProvider extends ChangeNotifier {
     } finally {
       _setLoading(false);
     }
+  }
+
+  /// 加载 Embedding 包 (路径)
+  Future<void> loadEmbeddingPackageFromPath(String filePath) async {
+     await loadEmbeddingPackage(PlatformFile(name: 'embedding.pak', path: filePath, size: 0));
   }
 
   /// 配置 LLM

@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:legal_engine_shared/legal_engine_shared.dart';
-import 'package:path_provider/path_provider.dart';
-import 'dart:io';
+import '../utils/file_exporter.dart';
 import '../providers/app_provider.dart';
 import '../widgets/mind_map_view.dart';
 
@@ -40,38 +39,82 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // 标题栏
-              Row(
-                children: [
-                  Text(
-                    '罪名分析结果',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const Spacer(),
-                  // 视图切换按钮
-                  if (provider.tieredResult != null) ...[
-                    _buildViewToggle(),
-                    const SizedBox(width: 8),
-                    // 导出按钮（仅思维导图模式显示）
-                    if (_isMindMapMode)
-                      IconButton(
-                        icon: _isExporting 
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.download),
-                        tooltip: '导出为 PNG',
-                        onPressed: _isExporting ? null : () => _exportMindMap(context),
+              // 标题栏
+              if (isWide)
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '罪名分析结果',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.refresh),
-                      label: Text(isWide ? '重新分析' : '重分析'),
-                      onPressed: () => provider.analyzeCase(),
                     ),
+                    const SizedBox(width: 16),
+                    // 视图切换按钮
+                    if (provider.tieredResult != null) ...[
+                      _buildViewToggle(),
+                      const SizedBox(width: 8),
+                      // 导出按钮（仅思维导图模式显示）
+                      if (_isMindMapMode)
+                        IconButton(
+                          icon: _isExporting 
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.download),
+                          tooltip: '导出为 PNG',
+                          onPressed: _isExporting ? null : () => _exportMindMap(context),
+                        ),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('重新分析'),
+                        onPressed: () => provider.analyzeCase(),
+                      ),
+                    ],
                   ],
-                ],
-              ),
+                )
+              else
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '罪名分析结果',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 12),
+                    // 移动端操作栏
+                    if (provider.tieredResult != null)
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _buildViewToggle(),
+                            const SizedBox(width: 8),
+                            if (_isMindMapMode)
+                              IconButton.filledTonal(
+                                icon: _isExporting
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      )
+                                    : const Icon(Icons.download, size: 20),
+                                onPressed: _isExporting ? null : () => _exportMindMap(context),
+                              ),
+                            const SizedBox(width: 8),
+                            FilledButton.tonalIcon(
+                              icon: const Icon(Icons.refresh, size: 18),
+                              label: const Text('重分析'),
+                              onPressed: () => provider.analyzeCase(),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
               const SizedBox(height: 8),
               if (isWide)
                 Text(
@@ -186,27 +229,27 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen> {
         throw Exception('导出失败');
       }
       
-      // 保存到文件
-      final directory = await getApplicationDocumentsDirectory();
+      // 导出图片
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final filePath = '${directory.path}/crime_analysis_$timestamp.png';
-      final file = File(filePath);
-      await file.writeAsBytes(pngBytes);
+      final filename = 'crime_analysis_$timestamp.png';
+      
+      final filePath = await FileExporter.exportImage(pngBytes, filename);
       
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('已导出到: $filePath'),
-            action: SnackBarAction(
-              label: '打开文件夹',
-              onPressed: () {
-                // 在 Windows 上打开文件夹
-                Process.run('explorer', [directory.path]);
-              },
+        if (filePath != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('已导出: $filePath'),
+              action: SnackBarAction(
+                label: '打开',
+                onPressed: () {
+                  FileExporter.openFile(filePath);
+                },
+              ),
+              duration: const Duration(seconds: 5),
             ),
-            duration: const Duration(seconds: 5),
-          ),
-        );
+          );
+        }
       }
     } catch (e) {
       if (context.mounted) {

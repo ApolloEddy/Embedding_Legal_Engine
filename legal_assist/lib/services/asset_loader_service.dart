@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
+
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:yaml/yaml.dart';
 import 'package:legal_engine_shared/legal_engine_shared.dart';
@@ -29,7 +29,7 @@ class AssetLoaderService {
     _yamlBase = _parseYaml(yamlContent);
     
     // 加载内置 Embedding 包
-    final pakContent = await rootBundle.loadString('assets/v4-embedding-刑法.pak');
+    final pakContent = await rootBundle.loadString('assets/embeddings/v4-embedding-criminal.pak');
     final json = jsonDecode(pakContent) as Map<String, dynamic>;
     
     final validation = JsonSchemaValidator.validateEmbeddingPackage(json);
@@ -40,26 +40,14 @@ class AssetLoaderService {
     _embeddingPackage = EmbeddingPackage.fromJson(json);
   }
 
-  /// 加载 YAML 基座文件
-  Future<YamlBase> loadYamlBase(String filePath) async {
-    final file = File(filePath);
-    if (!await file.exists()) {
-      throw FileSystemException('YAML 基座文件不存在', filePath);
-    }
-
-    final content = await file.readAsString();
+  /// 解析 YAML 基座内容
+  Future<YamlBase> loadYamlFromContent(String content) async {
     _yamlBase = _parseYaml(content);
     return _yamlBase!;
   }
 
-  /// 加载 Embedding 包
-  Future<EmbeddingPackage> loadEmbeddingPackage(String filePath) async {
-    final file = File(filePath);
-    if (!await file.exists()) {
-      throw FileSystemException('Embedding 包文件不存在', filePath);
-    }
-
-    final content = await file.readAsString();
+  /// 解析 Embedding 包内容
+  Future<EmbeddingPackage> loadEmbeddingPackageFromContent(String content) async {
     final json = jsonDecode(content) as Map<String, dynamic>;
 
     // 校验格式

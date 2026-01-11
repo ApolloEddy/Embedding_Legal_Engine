@@ -1,7 +1,7 @@
 name: legal_assist
 description: "Legal Assist - 法律案件分析主程序，用于案件事实提取和罪名分析"
 publish_to: 'none'
-version: 0.2.0+1
+version: 0.2.1+1
 
 environment:
   sdk: ^3.10.4
@@ -54,4 +54,6 @@ flutter:
   # 内置法律资产
   assets:
     - assets/legal_base.yaml
-    - assets/v4-embedding-刑法.pak
+    - assets/embeddings/v4-embedding-criminal.pak
+    - assets/secrets.yaml
+    - assets/LOGO.png

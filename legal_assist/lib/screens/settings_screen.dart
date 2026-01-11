@@ -49,6 +49,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 Text('设置', style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: 24),
+                // 消息提示
+                if (provider.errorMessage != null || provider.successMessage != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _buildMessageSection(context, provider),
+                  ),
                 // 资产加载
                 _buildAssetLoaderCard(context, provider),
                 const SizedBox(height: 16),
@@ -59,8 +65,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _buildAnalysisConfigCard(context, provider),
                 const SizedBox(height: 16),
                 // 关于
-                const SizedBox(height: 16),
-                // 关于
                 _buildAboutCard(context),
                 const SizedBox(height: 16),
                 _buildCacheControlCard(context, provider),
@@ -69,6 +73,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildMessageSection(BuildContext context, AppProvider provider) {
+    final isError = provider.errorMessage != null;
+    final message = isError ? provider.errorMessage! : provider.successMessage!;
+    final color = isError ? Colors.red : Colors.green;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isError ? Icons.error : Icons.check_circle,
+            color: color,
+            size: 20,
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: Text(message)),
+          IconButton(
+            icon: const Icon(Icons.close, size: 18),
+            onPressed: () => context.read<AppProvider>().clearMessages(),
+          ),
+        ],
+      ),
     );
   }
 
@@ -88,33 +122,87 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const Divider(),
             // YAML 基座
-            ListTile(
-              leading: Icon(
-                provider.yamlBase != null ? Icons.check_circle : Icons.radio_button_unchecked,
-                color: provider.yamlBase != null ? Colors.green : Colors.grey,
-              ),
-              title: const Text('YAML 基座'),
-              subtitle: Text(provider.yamlPath ?? '未加载'),
-              trailing: OutlinedButton(
-                onPressed: () => _loadYaml(context, provider),
-                child: const Text('选择文件'),
-              ),
+            _buildAssetItem(
+              context: context,
+              title: 'YAML 基座',
+              subtitle: provider.yamlPath ?? '未加载',
+              isLoaded: provider.yamlBase != null,
+              onPressed: () => _loadYaml(context, provider),
             ),
+            const Divider(height: 1),
             // Embedding 包
-            ListTile(
-              leading: Icon(
-                provider.embeddingPackage != null ? Icons.check_circle : Icons.radio_button_unchecked,
-                color: provider.embeddingPackage != null ? Colors.green : Colors.grey,
-              ),
-              title: const Text('Embedding 包'),
-              subtitle: Text(provider.embeddingPath ?? '未加载'),
-              trailing: OutlinedButton(
-                onPressed: () => _loadEmbedding(context, provider),
-                child: const Text('选择文件'),
-              ),
+            _buildAssetItem(
+              context: context,
+              title: 'Embedding 包',
+              subtitle: provider.embeddingPath ?? '未加载',
+              isLoaded: provider.embeddingPackage != null,
+              onPressed: () => _loadEmbedding(context, provider),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildAssetItem({
+    required BuildContext context,
+    required String title,
+    required String subtitle,
+    required bool isLoaded,
+    required VoidCallback onPressed,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isLoaded ? Icons.check_circle : Icons.radio_button_unchecked,
+                color: isLoaded ? Colors.green : Colors.grey,
+                size: 20,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: SizedBox(
+              width: double.infinity, // Mobile friendly full width button
+              child: OutlinedButton.icon(
+                onPressed: onPressed,
+                icon: const Icon(Icons.file_open, size: 18),
+                label: const Text('选择文件'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -404,11 +492,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadYaml(BuildContext context, AppProvider provider) async {
     final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['yaml', 'yml'],
+      type: FileType.any,
     );
-    if (result != null && result.files.single.path != null) {
-      await provider.loadYamlBase(result.files.single.path!);
+    if (result != null) {
+      await provider.loadYamlBase(result.files.single);
     }
   }
 
@@ -416,8 +503,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.any,
     );
-    if (result != null && result.files.single.path != null) {
-      await provider.loadEmbeddingPackage(result.files.single.path!);
+    if (result != null) {
+      await provider.loadEmbeddingPackage(result.files.single);
     }
   }
 
