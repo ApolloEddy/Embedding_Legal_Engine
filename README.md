@@ -239,4 +239,6 @@ Embedding_Legal_Engine/
 
 ## 许可证
 
-本项目仅供学术研究和内部使用。
+本项目采用 Apache License 2.0 协议开源。详情请参阅 [LICENSE](LICENSE) 文件。
+
+Copyright 2026 Legal Assist Authors
